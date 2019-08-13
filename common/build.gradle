@@ -1,0 +1,90 @@
+apply plugin: 'kotlin-multiplatform'
+
+buildscript {
+    repositories {
+        jcenter()
+    }
+
+    dependencies {
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+repositories {
+    maven { url "https://kotlin.bintray.com/ktor" }
+    google()
+    jcenter()
+}
+
+dependencies {
+    commonMainImplementation "io.ktor:ktor-client-core:1.2.3"
+    commonMainImplementation fileTree(dir: 'libs', include: ['*.jar'])
+
+//    androidMainImplementation "io.ktor:ktor-client-android:1.2.3"
+//    iosMainImplementation "io.ktor:ktor-client-ios:1.2.3"
+
+}
+
+kotlin {
+    targets {
+//        final def iOSTarget = System.getenv('SDK_NAME')?.startsWith("iphoneos") \
+//                              ? presets.iosArm64 : presets.iosX64
+
+//        fromPreset(presets.android, 'android')
+        fromPreset(presets.iosX64, 'iosX64')
+        fromPreset(presets.iosArm64, 'iosArm64')
+//        fromPreset(iOSTarget, 'ios') {
+//            binaries {
+//               framework('common')
+//            }
+//        }
+
+    }
+
+    sourceSets {
+        iosMain
+        configure([androidMain]) {
+            dependsOn commonMain
+        }
+        configure([iosX64Main, iosArm64Main]) {
+            dependsOn iosMain
+        }
+//        commonMain.dependencies {
+//            api 'org.jetbrains.kotlin:kotlin-stdlib-common'
+//            api 'io.ktor:ktor-client-core:1.2.3'
+//        }
+//
+//        androidMain.dependencies {
+//            api 'org.jetbrains.kotlin:kotlin-stdlib'
+//        }
+
+//        iosMain.dependecies {
+//            api 'io.ktor:ktor-client-ios:1.2.3'
+//        }
+    }
+}
+
+configurations {
+    compileClassPath
+}
+
+task packForXCode(type: Sync) {
+    final File frameworkDir = new File(buildDir, "xcode-frameworks")
+    final String mode = project.findProperty("XCODE_CONFIGURATION")?.toUpperCase() ?: 'DEBUG'
+    final def framework = kotlin.targets.ios.binaries.getFramework("common", mode)
+
+    inputs.property "mode", mode
+    dependsOn framework.linkTask
+
+    from { framework.outputFile.parentFile }
+    into frameworkDir
+
+    doLast {
+        new File(frameworkDir, 'gradlew').with {
+            text = "#!/bin/bash\nexport 'JAVA_HOME=${System.getProperty("java.home")}'\ncd '${rootProject.rootDir}'\n./gradlew \$@\n"
+            setExecutable(true)
+        }
+    }
+}
+
+tasks.build.dependsOn packForXCode
